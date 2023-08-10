@@ -1,0 +1,23 @@
+{
+	"name": "Sample",
+	"description": "Sample plugin",
+	"author": "FUTO",
+	"authorUrl": "https://futo.org",
+	
+	"sourceUrl": "https://plugins.grayjay.app/Sample/SampleConfig.json",
+	"repositoryUrl": "https://futo.org",
+	"scriptUrl": "./SampleScript.js",
+	"version": 23,
+	
+	"iconUrl": "./sample.png",
+	"id": "82b8fefc-24aa-11ee-be56-0242ac120002",
+	
+	"scriptSignature": "",
+	"scriptPublicKey": "",
+	"packages": ["Http"],
+	
+	"allowEval": false,
+	"allowUrls": [
+		
+	]
+}
