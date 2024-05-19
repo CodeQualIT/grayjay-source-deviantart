@@ -8,7 +8,7 @@
 	"sourceUrl": "https://github.com/CodeQualIT/grayjay-source-deviantart/blob/master/DAConfig.json",
 	"repositoryUrl": "https://github.com/CodeQualIT/grayjay-source-deviantart",
 	"scriptUrl": "./DAScript.js",
-	"version": 23,
+	"version": "0.1.0-SNAPSHOT",
 	
 	"iconUrl": "./DALogo.png",
 	"id": "a82a6e4d-4e91-466e-8c46-d7895654e2d1",
