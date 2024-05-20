@@ -3,6 +3,11 @@ const URL_HOME = "https://www.deviantart.com/";
 
 var config = {};
 
+var defaultHeaders = {
+  "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.5481.153 Mobile Safari/537.36"
+};
+
+
 source.enable = function (conf, settings, savedState) {
   config = conf ?? {};
 }
@@ -36,25 +41,39 @@ function getHomeResults(url) {
   if (!url) {
     url = URL_HOME;
   }
-  const homeResp = http.GET(url, {}, false);
+  const homeResp = http.GET(url, defaultHeaders, false);
   if (!homeResp.isOk) {
     throw new UnavailableException(`Failed to get home [${homeResp.code}]`);
   }
-  const dom = domParser.parseFromString(homeResp.body);
-  const main = dom.getElementsByTagName("main")[0];
-  const content = main.children[2].children[0].children[0];
-
-  const nextLink = content.children[1].getElementsByTagName("a")[0];
-  const nextUrl = nextLink ? nextLink.href : null;
-
-  const rows = content.children[0].children[0].children[0].children;
   return {
-    posts: [...rows].flatMap(row => {
-      const posts = row.children[0].children;
-      return [...posts].map(post => getPlatformPost(post.children[0]));
-    }),
-    nextUrl: nextUrl
+    posts: [new PlatformPost({
+      id: new PlatformID(PLATFORM, "1", config.id),
+      name: homeResp.body,
+      author: new PlatformAuthorLink(
+          new PlatformID(PLATFORM, "2", config.id),
+          "authorName",
+          "authorUrl",
+          "authorAvatar"
+      ),
+      url: "postUrl"
+    })],
+    nextUrl: null
   };
+  // const dom = domParser.parseFromString(homeResp.body);
+  // const main = dom.getElementsByTagName("main")[0];
+  // const content = main.children[2].children[0].children[0];
+  //
+  // const nextLink = content.children[1].getElementsByTagName("a")[0];
+  // const nextUrl = nextLink ? nextLink.href : null;
+  //
+  // const rows = content.children[0].children[0].children[0].children;
+  // return {
+  //   posts: [...rows].flatMap(row => {
+  //     const posts = row.children[0].children;
+  //     return [...posts].map(post => getPlatformPost(post.children[0]));
+  //   }),
+  //   nextUrl: nextUrl
+  // };
 }
 
 function getPlatformPost(post) {
