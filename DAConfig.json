@@ -15,7 +15,7 @@
 	
 	"scriptSignature": "",
 	"scriptPublicKey": "",
-	"packages": ["Http", "DOMParser"],
+	"packages": ["Http", "DOMParser", "Utilities"],
 	
 	"allowEval": false,
 	"allowUrls": [

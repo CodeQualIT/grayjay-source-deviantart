@@ -7,6 +7,8 @@ var defaultHeaders = {
   "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.5481.153 Mobile Safari/537.36"
 };
 
+var logStr;
+
 
 source.enable = function (conf, settings, savedState) {
   config = conf ?? {};
@@ -14,7 +16,7 @@ source.enable = function (conf, settings, savedState) {
 
 source.getHome = function () {
   const results = getHomeResults();
-  return new HomePager(results.posts, hasMore(results));
+  return new HomePager(results.posts, hasMore(results), results.nextUrl);
 };
 
 class HomePager extends ContentPager {
@@ -41,65 +43,71 @@ function getHomeResults(url) {
   if (!url) {
     url = URL_HOME;
   }
+  logStr = "";
   const homeResp = http.GET(url, defaultHeaders, false);
   if (!homeResp.isOk) {
     throw new UnavailableException(`Failed to get home [${homeResp.code}]`);
   }
-  return {
-    posts: [new PlatformPost({
-      id: new PlatformID(PLATFORM, "1", config.id),
-      name: homeResp.body,
-      author: new PlatformAuthorLink(
-          new PlatformID(PLATFORM, "2", config.id),
-          "authorName",
-          "authorUrl",
-          "authorAvatar"
-      ),
-      url: "postUrl"
-    })],
-    nextUrl: null
+  log(homeResp.body, "HTTP body: ");
+  const dom = domParser.parseFromString(homeResp.body);
+
+  // log(dom, "DOM object: ");
+  // log(dom.children, "DOM children: ");
+  // log(dom.children?.[0], "DOM html object: ");
+  // log(dom.children?.[0]?.outerHTML, "DOM html outerHTML: ");
+  // log(dom.children?.[0]?.children, "DOM html children: ")
+  // return logStrAsPlatformPost();
+
+  const body = dom.getElementsByTagName("body")[0];
+  const content = body.children[1].children[0].children[2].children[0].children[0];
+
+  log(content, "Content element: ")
+  log(content.children, "Content children: ")
+  const nextLink = content.children[1].getElementsByTagName("a")[0];
+  const nextUrl = nextLink ? nextLink.href : null;
+
+  log(nextUrl, "Next URL: ");
+
+  const posts = content.children[0].children[0].children;
+  const platformPosts = [...posts].map(post => {
+    const postElements = post.children;
+    const lastElement = postElements[postElements.length - 1]
+    return getPlatformPost(lastElement.children[0]);
+  });
+  const results = {
+    posts: platformPosts,
+    nextUrl: nextUrl
   };
-  // const dom = domParser.parseFromString(homeResp.body);
-  // const main = dom.getElementsByTagName("main")[0];
-  // const content = main.children[2].children[0].children[0];
-  //
-  // const nextLink = content.children[1].getElementsByTagName("a")[0];
-  // const nextUrl = nextLink ? nextLink.href : null;
-  //
-  // const rows = content.children[0].children[0].children[0].children;
-  // return {
-  //   posts: [...rows].flatMap(row => {
-  //     const posts = row.children[0].children;
-  //     return [...posts].map(post => getPlatformPost(post.children[0]));
-  //   }),
-  //   nextUrl: nextUrl
-  // };
+  log(results, "Results: ");
+  return results;
 }
 
 function getPlatformPost(post) {
-  const postElements = post.children;
-  const postSummary = postElements[postElements.length - 2].getAttribute("aria-label");
-  if (postSummary.endsWith("visual art")) {
+  log(post, "Found post: ");
+  log(post.children, "Post children: ");
+  if (post.children[1]?.getAttribute("aria-label")?.endsWith("visual art")) {
     return getVisualArtPlatformPost(post);
   }
-  if (postSummary.endsWith("literature")) {
+  if (post.children[1]?.children[3]?.getAttribute("aria-label")?.endsWith("literature")) {
     return getLiteraturePlatformPost(post);
   }
   throw new ScriptException("UnsupportedPostTypeException", `Unknown post type. Child element count: ${post.children.length}`);
 }
 
 function getVisualArtPlatformPost(post) {
-  const link = post.children[0];
-  const metadata = post.children[1].children[2].children[2]
+  log("Found visual art post");
+  const link = post.children[1];
+  const postHeader = post.children[0].children[0].children[0]
+  const postFooter = post.children[2].children[0]
 
   const postThumbnailUrl  = link.getElementsByTagName("img")[0].getAttribute("src");
-  const postName = metadata.children[0].children[0].children[0].textContent;
+  const postName = postHeader.children[1].children[0].children[0].textContent;
 
   const postUrl = link.getAttribute("href");
   const postId = postUrl.split("-").pop();
-  const postFavorites = getPostFavorites(metadata);
+  const postFavorites = getPostFavorites(postFooter);
 
-  const authorData = metadata.children[0].children[1].children[0].children[0].children[0];
+  const authorData = postHeader.children[0];
   const platformAuthorLink = getPlatformAuthorLink(authorData);
 
   return new PlatformPostDetails({
@@ -113,17 +121,20 @@ function getVisualArtPlatformPost(post) {
 }
 
 function getLiteraturePlatformPost(post) {
-  const previewText = post.children[1];
-  const link = post.children[2];
-  const metadata = post.children[3].children[2].children[2]
+  log("Found literature post");
+  const previewText = post.children[1].children[0];
+
+  const link = post.children[1].children[3];
+  const postHeader = post.children[0].children[0].children[0]
+  const postFooter = post.children[2].children[0]
 
   const postName = previewText.children[2].textContent;
 
   const postUrl = link.getAttribute("href");
   const postId = postUrl.split("-").pop();
-  const postFavorites = getPostFavorites(metadata);
+  const postFavorites = getPostFavorites(postFooter);
 
-  const authorData = metadata.children[0].children[0].children[0].children[0].children[0];
+  const authorData = postHeader.children[0];
   const platformAuthorLink = getPlatformAuthorLink(authorData);
 
   return new PlatformPostDetails({
@@ -135,12 +146,16 @@ function getLiteraturePlatformPost(post) {
   });
 }
 
-function getPostFavorites(metadata) {
-  const postInteraction = metadata.children[1].children;
-  const rawFavoritesStr = postInteraction[postInteraction.length - 1].children[1].textContent;
-  const favoritesStr = rawFavoritesStr.replace("K", "000")
-                                             .replace("M", "000000");
-  return parseInt(favoritesStr);
+function getPostFavorites(postFooter) {
+  const favoritesStr = postFooter.children[0].children[1].textContent;
+  let favoriteCount = parseFloat(favoritesStr)
+  if(favoritesStr.endsWith("K")){
+    favoriteCount *= 1000
+  }
+  if(favoritesStr.endsWith("M")){
+    favoriteCount *= 1000000
+  }
+  return Math.trunc(favoriteCount);
 }
 
 function getPlatformAuthorLink(authorData) {
@@ -154,4 +169,55 @@ function getPlatformAuthorLink(authorData) {
       authorUrl,
       authorAvatar
   );
+}
+
+function log(str, prefix = "") {
+  if(prefix) {
+    console.log(prefix);
+  }
+  console.log(str);
+  logStr += prefix + str + "\n";
+}
+
+function logStrAsPlatformPost() {
+  const strByteArray = strToUtf8Bytes(logStr);
+  const strBase64 = utility.toBase64(strByteArray);
+  return {
+    posts: [new PlatformPost({
+      id: new PlatformID(PLATFORM, "1", config.id),
+      name: strBase64,
+      author: new PlatformAuthorLink(
+          new PlatformID(PLATFORM, "2", config.id),
+          "authorName",
+          "authorUrl",
+          "authorAvatar"
+      ),
+      url: "postUrl"
+    })],
+    nextUrl: null
+  };
+}
+
+function strToUtf8Bytes(strOrUndefined) {
+  const str = "" + strOrUndefined
+  const utf8 = [];
+  for (let ii = 0; ii < str.length; ii++) {
+    let charCode = str.charCodeAt(ii);
+    if (charCode < 0x80) utf8.push(charCode);
+    else if (charCode < 0x800) {
+      utf8.push(0xc0 | (charCode >> 6), 0x80 | (charCode & 0x3f));
+    } else if (charCode < 0xd800 || charCode >= 0xe000) {
+      utf8.push(0xe0 | (charCode >> 12), 0x80 | ((charCode >> 6) & 0x3f), 0x80 | (charCode & 0x3f));
+    } else {
+      ii++;
+      charCode = 0x10000 + (((charCode & 0x3ff) << 10) | (str.charCodeAt(ii) & 0x3ff));
+      utf8.push(
+          0xf0 | (charCode >> 18),
+          0x80 | ((charCode >> 12) & 0x3f),
+          0x80 | ((charCode >> 6) & 0x3f),
+          0x80 | (charCode & 0x3f),
+      );
+    }
+  }
+  return new Uint8Array(utf8);
 }
